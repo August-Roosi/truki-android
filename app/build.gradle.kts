@@ -87,7 +87,10 @@ val selectableVariants = listOf(
   "websiteProdSpinner",
   "websiteProdRelease",
   "githubProdSpinner",
-  "githubProdRelease"
+  "githubProdRelease",
+  // Truki: Wear OS
+  "wearProdDebug",
+  "wearProdRelease"
 )
 
 // Wire 5.x iterates Android source sets and expects matching Kotlin source sets.
@@ -466,6 +469,16 @@ android {
       buildConfigField("boolean", "MANAGES_APP_UPDATES", "false")
       buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "null")
       buildConfigField("String", "BUILD_DISTRIBUTION_TYPE", "\"nightly\"")
+      buildConfigField("boolean", "LINK_DEVICE_UX_ENABLED", "true")
+    }
+
+    // Truki: Wear OS build. All of its code lives in src/wear.
+    create("wear") {
+      dimension = "distribution"
+      applicationId = "ee.truki.wear"
+      buildConfigField("boolean", "MANAGES_APP_UPDATES", "false")
+      buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "null")
+      buildConfigField("String", "BUILD_DISTRIBUTION_TYPE", "\"wear\"")
       buildConfigField("boolean", "LINK_DEVICE_UX_ENABLED", "true")
     }
 

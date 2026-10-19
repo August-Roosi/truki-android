@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright 2026 Truki
+  SPDX-License-Identifier: AGPL-3.0-only
+
+  Truki Wear: merged over the main manifest for the "wear" flavor only.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-feature android:name="android.hardware.type.watch" />
+
+    <application
+        android:label="@string/truki_wear_app_name"
+        tools:replace="android:label">
+
+        <!-- Runs without a paired phone (LTE / Wi-Fi). -->
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="true" />
+
+        <!-- The phone launcher opens the phone UI; the watch gets its own. -->
+        <activity-alias
+            android:name=".RoutingActivity"
+            android:enabled="false"
+            tools:node="merge" />
+
+        <provider
+            android:name=".truki.wear.TrukiWearInitProvider"
+            android:authorities="${applicationId}.trukiwearinit"
+            android:exported="false" />
+
+        <activity
+            android:name=".truki.wear.TrukiWearActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Truki.Wear">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright 2026 Truki
+  SPDX-License-Identifier: AGPL-3.0-only
+-->
+<resources>
+    <string name="truki_wear_app_name" translatable="false">Trüki</string>
+    <string name="truki_wear_no_chats">No chats yet</string>
+    <string name="truki_wear_reply">Reply</string>
+    <string name="truki_wear_reply_hint">Message</string>
+    <string name="truki_wear_send">Send</string>
+    <string name="truki_wear_you">You</string>
+    <string name="truki_wear_in_another_call">You\'re already in another call</string>
+
+    <style name="Theme.Truki.Wear" parent="@style/TextSecure.DarkNoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>
