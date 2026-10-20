@@ -12,6 +12,8 @@ import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
+import org.signal.registration.RegistrationActivity
+import org.signal.registration.RegistrationRoute
 import org.thoughtcrime.securesms.MainActivity
 import org.thoughtcrime.securesms.conversation.ConversationIntents
 import org.thoughtcrime.securesms.conversation.v2.ConversationActivity
@@ -22,6 +24,23 @@ import org.thoughtcrime.securesms.conversation.v2.ConversationActivity
  * notifications point). Done from the outside so no upstream code changes.
  */
 object TrukiWearRedirect : Application.ActivityLifecycleCallbacks {
+
+  /** Mirrors the private key in [RegistrationActivity.createIntent]. */
+  private const val REGISTRATION_START_DESTINATION_EXTRA = "start_destination"
+
+  /**
+   * A watch must only ever *link*. Registering a phone number here would make
+   * the watch the primary device and log out the phone, and the captcha step
+   * needs a WebView, which Wear OS does not have. So any registration flow
+   * that has no explicit destination opens straight on the link QR screen.
+   */
+  override fun onActivityPreCreated(activity: Activity, savedInstanceState: Bundle?) {
+    if (activity !is RegistrationActivity) return
+    val intent = activity.intent ?: return
+    if (!intent.hasExtra(REGISTRATION_START_DESTINATION_EXTRA)) {
+      intent.putExtra(REGISTRATION_START_DESTINATION_EXTRA, RegistrationRoute.LinkAccount(showCreateAccount = false))
+    }
+  }
 
   override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
     val threadId: Long? = when (activity) {
