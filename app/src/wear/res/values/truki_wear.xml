@@ -5,12 +5,22 @@
 -->
 <resources>
     <string name="truki_wear_app_name" translatable="false">Trüki</string>
-    <string name="truki_wear_no_chats">No chats yet</string>
+    <string name="truki_wear_no_chats">No chats in this folder yet</string>
+    <string name="truki_wear_folders">Folders</string>
+    <string name="truki_wear_unread_count">%1$d unread</string>
     <string name="truki_wear_reply">Reply</string>
-    <string name="truki_wear_reply_hint">Message</string>
-    <string name="truki_wear_send">Send</string>
-    <string name="truki_wear_you">You</string>
+    <string name="truki_wear_call">Call</string>
+    <string name="truki_wear_new_chat">New chat</string>
     <string name="truki_wear_in_another_call">You\'re already in another call</string>
+
+    <!-- Offered as suggestions on the system reply screen. -->
+    <string-array name="truki_wear_quick_replies">
+        <item>👍</item>
+        <item>OK</item>
+        <item>On my way</item>
+        <item>Call you soon</item>
+        <item>Thanks!</item>
+    </string-array>
 
     <style name="Theme.Truki.Wear" parent="@style/TextSecure.DarkNoActionBar">
         <item name="android:windowBackground">@android:color/black</item>

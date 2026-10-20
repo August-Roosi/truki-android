@@ -15,17 +15,21 @@ cheaply.** Every line changed in an upstream file can conflict on every merge.
 
 1. New behaviour goes in **new files** under `app/src/wear/` (the `wear`
    flavor's source set). Kotlin package `org.thoughtcrime.securesms.truki.wear`.
-2. Edits to upstream files are additive and marked `// Truki:`. Today there are
-   two, both in `app/build.gradle.kts`: the `wear` flavor block, and
-   `wearProdDebug`/`wearProdRelease` appended to `selectableVariants` (upstream
-   disables every variant not on that list).
+2. Edits to upstream files are additive and marked `// Truki:`. Today:
+   `app/build.gradle.kts` (the `wear` flavor block, `wearProdDebug`/
+   `wearProdRelease` appended to `selectableVariants` because upstream disables
+   every variant not on that list, and the `wearImplementation` lines), plus
+   generated checksum entries in `gradle/verification-metadata.xml`.
 3. Never reformat, reorder or tidy upstream code.
 4. Truki-owned files carry a `truki` path segment or `Truki` in the name, and the
    header `Copyright 2026 Truki` / `SPDX-License-Identifier: AGPL-3.0-only`.
 5. **No new dependencies without need.** Signal verifies every dependency's
-   checksum (`gradle/verification-metadata.xml`); a new library means editing
-   that upstream file. The UI therefore uses plain Compose (already shipped),
-   not `androidx.wear.compose`.
+   checksum (`gradle/verification-metadata.xml`). Truki Wear adds exactly the
+   Wear libraries (`androidx.wear.compose` material3/foundation/navigation and
+   `androidx.wear:wear-input`), declared as `wearImplementation` in
+   `app/build.gradle.kts`. Their checksums were added with
+   `./gradlew --write-verification-metadata sha256 :Signal-Android:assembleWearProdDebug`;
+   on an upstream merge, take upstream's metadata file and re-run that command.
 
 ## How it fits together
 
@@ -57,8 +61,27 @@ cheaply.** Every line changed in an upstream file can conflict on every merge.
 3. Audio calls via upstream's calling stack (RingRTC) with a watch call screen.
 4. Battery: replace the always-on websocket with push (UnifiedPush/MollySocket
    or a hub relay). Option later: move encryption to the hub.
-5. A watch-shaped link screen; switch UI to `androidx.wear.compose` if the
-   verification-metadata edit is judged worth it.
+5. A watch-shaped link screen.
+
+## Watch UI
+
+Wear Compose Material 3: `AppScaffold` + `SwipeDismissableNavHost` (swipe
+right to go back), `ScreenScaffold` + `TransformingLazyColumn` (the curved,
+scaling list; rotary scrolling built in). Routes: `chats` (current chat folder,
+pinned first, folder button at top), `folders` (pick a chat folder; choice kept
+in the `truki_wear` SharedPreferences), `thread/{threadId}` (messages, call
+button, `EdgeButton` opening the system reply screen via `RemoteInput`, with
+quick replies as its suggestions). Avatars use upstream's `AvatarImage`.
+Colours follow the watch's dynamic theme when it has one.
+
+## Testing on the watch
+
+The watch (SM-L715F, 32-bit ARM only: install the `armeabi-v7a` APK) is paired
+over wireless debugging with the Windows PC `anteos` (SSH `roosi@100.67.244.52`
+over Tailscale), whose Android SDK has adb. Helper scripts in the PC's home
+folder: `install.ps1 [-Clear]` (push, install, launch, crash log), `shot.ps1
+-Name x` (screenshot to `x.png`), `state.ps1` (link/websocket log). Both must
+be on the same Wi-Fi; a locked watch shows the watch face in screenshots.
 
 ## Build environment (roosi)
 

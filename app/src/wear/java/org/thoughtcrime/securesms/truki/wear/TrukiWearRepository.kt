@@ -9,39 +9,67 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import org.thoughtcrime.securesms.R
+import org.thoughtcrime.securesms.components.settings.app.chats.folders.ChatFolderRecord
+import org.thoughtcrime.securesms.conversationlist.model.ConversationFilter
 import org.thoughtcrime.securesms.database.DatabaseObserver
+import org.signal.core.util.readToList
+import org.signal.core.util.requireObject
 import org.thoughtcrime.securesms.database.MessageTable
+import org.thoughtcrime.securesms.database.RecipientTable
 import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.dependencies.AppDependencies
 import org.thoughtcrime.securesms.keyvalue.SettingsValues.ForceWebsocketMode
 import org.thoughtcrime.securesms.keyvalue.SignalStore
-import org.thoughtcrime.securesms.messages.IncomingMessageObserver
 import org.thoughtcrime.securesms.mms.OutgoingMessage
 import org.thoughtcrime.securesms.notifications.MarkReadReceiver
 import org.thoughtcrime.securesms.recipients.Recipient
+import org.thoughtcrime.securesms.recipients.RecipientId
 import org.thoughtcrime.securesms.sms.MessageSender
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * The watch UI's only door into Signal's core: reads chats and messages from
- * upstream's database and sends through upstream's [MessageSender].
+ * The watch UI's only door into Signal's core: reads chats, folders and
+ * messages from upstream's database and sends through upstream's [MessageSender].
  */
 object TrukiWearRepository {
 
-  private const val CHAT_LIMIT = 40
-  private const val MESSAGE_LIMIT = 30L
+  private const val CHAT_LIMIT = 60L
+  private const val MESSAGE_LIMIT = 40L
+  private const val PREFS = "truki_wear"
+  private const val PREF_FOLDER_ID = "folder_id"
+
+  data class Folder(
+    val id: Long,
+    val name: String,
+    val unreadCount: Int,
+    val isAllChats: Boolean,
+    /** Truki Desktop's Space icon, if set. */
+    val emoji: String? = null,
+    /** Truki Desktop's Space accent colour (0xAARRGGBB), if set. */
+    val color: Int? = null
+  )
+
+  data class Contact(
+    val recipientId: RecipientId,
+    val name: String
+  )
 
   data class Chat(
     val threadId: Long,
+    val recipientId: RecipientId,
     val name: String,
     val snippet: String,
     val unreadCount: Int,
-    val date: Long
+    val date: Long,
+    val isPinned: Boolean
   )
 
   data class Message(
@@ -51,6 +79,8 @@ object TrukiWearRepository {
     val body: String,
     val date: Long
   )
+
+  private val selectedFolderId = MutableStateFlow<Long?>(null)
 
   /**
    * A fork cannot receive Signal's FCM pushes, so the watch keeps its own
@@ -65,16 +95,51 @@ object TrukiWearRepository {
     AppDependencies.startNetwork()
   }
 
-  fun chats(context: Context): Flow<List<Chat>> {
-    return changes { observer -> AppDependencies.databaseObserver.registerConversationListObserver(observer) }
-      .map { loadChats(context) }
-      .flowOn(Dispatchers.IO)
+  fun selectFolder(context: Context, folderId: Long) {
+    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putLong(PREF_FOLDER_ID, folderId).apply()
+    selectedFolderId.value = folderId
+  }
+
+  fun folders(context: Context): Flow<List<Folder>> {
+    return combine(
+      changes(
+        { AppDependencies.databaseObserver.registerChatFolderObserver(it) },
+        { AppDependencies.databaseObserver.registerConversationListObserver(it) }
+      ),
+      selectedFolderId
+    ) { _, _ -> loadFolders(context) }.flowOn(Dispatchers.IO)
+  }
+
+  /** The current folder (falls back to All chats) and its chats, pinned first. */
+  fun chats(context: Context): Flow<Pair<Folder, List<Chat>>> {
+    return combine(
+      changes(
+        { AppDependencies.databaseObserver.registerChatFolderObserver(it) },
+        { AppDependencies.databaseObserver.registerConversationListObserver(it) }
+      ),
+      selectedFolderId
+    ) { _, _ -> loadChats(context) }.flowOn(Dispatchers.IO)
   }
 
   fun messages(context: Context, threadId: Long): Flow<List<Message>> {
-    return changes { observer -> AppDependencies.databaseObserver.registerConversationObserver(threadId, observer) }
+    return changes({ AppDependencies.databaseObserver.registerConversationObserver(threadId, it) })
       .map { loadMessages(context, threadId) }
       .flowOn(Dispatchers.IO)
+  }
+
+  /** Everyone you can message on Signal, sorted by name, for starting a new chat. */
+  suspend fun contacts(context: Context): List<Contact> = withContext(Dispatchers.IO) {
+    SignalDatabase.recipients
+      .getSignalContacts(RecipientTable.IncludeSelfMode.Exclude)
+      .readToList { it.requireObject(RecipientTable.ID, RecipientId.SERIALIZER) }
+      .map { id -> Recipient.resolved(id) }
+      .filter { !it.isBlocked }
+      .map { Contact(recipientId = it.id, name = it.getDisplayName(context)) }
+  }
+
+  /** The chat with this person, created if it does not exist yet. */
+  suspend fun threadFor(recipientId: RecipientId): Long = withContext(Dispatchers.IO) {
+    SignalDatabase.threads.getOrCreateThreadIdFor(Recipient.resolved(recipientId))
   }
 
   suspend fun recipient(threadId: Long): Recipient? = withContext(Dispatchers.IO) {
@@ -96,17 +161,81 @@ object TrukiWearRepository {
     MessageSender.send(context, message, threadId, MessageSender.SendType.SIGNAL, null, null)
   }
 
-  private fun loadChats(context: Context): List<Chat> {
+  private fun currentFolderRecords(context: Context): Pair<List<ChatFolderRecord>, ChatFolderRecord> {
+    val records = SignalDatabase.chatFolders.getCurrentChatFolders()
+    val wanted = selectedFolderId.value
+      ?: context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(PREF_FOLDER_ID, -1L).also { selectedFolderId.value = it }
+    val current = records.firstOrNull { it.id == wanted }
+      ?: records.firstOrNull { it.folderType == ChatFolderRecord.FolderType.ALL }
+      ?: ChatFolderRecord(folderType = ChatFolderRecord.FolderType.ALL)
+    return records to current
+  }
+
+  private fun ChatFolderRecord.toFolder(context: Context, unreadCount: Int): Folder {
+    val isAll = folderType == ChatFolderRecord.FolderType.ALL
+    val extras = TrukiFolderExtras.parse(storageServiceProto)
+    return Folder(
+      id = id,
+      // Truki Desktop can rename General (the All chats folder); blank means the stock label.
+      name = if (isAll) name.ifBlank { context.getString(R.string.ChatFoldersFragment__all_chats) } else name,
+      unreadCount = unreadCount,
+      isAllChats = isAll,
+      emoji = extras.emoji,
+      color = extras.color
+    )
+  }
+
+  /**
+   * Threads claimed by a Truki Space marked "hide from General". Uses
+   * membership only: the folder's unread/muted display filters are ignored,
+   * matching Truki Desktop, so a read or muted chat stays hidden too.
+   */
+  private fun threadsHiddenFromAllChats(records: List<ChatFolderRecord>): Set<Long> {
     val threads = SignalDatabase.threads
-    return threads.readerFor(threads.getRecentConversationList(CHAT_LIMIT, false, true)).use { reader ->
+    return records
+      .filter { it.folderType != ChatFolderRecord.FolderType.ALL && TrukiFolderExtras.parse(it.storageServiceProto).hideFromAllChats }
+      .flatMap { record ->
+        val membership = record.copy(showUnread = false, showMutedChats = true)
+        listOf(true, false).flatMap { pinned ->
+          threads.getUnarchivedConversationList(ConversationFilter.OFF, pinned, 0, Long.MAX_VALUE, membership).use { cursor ->
+            threads.readerFor(cursor).use { reader -> generateSequence { reader.getNext() }.map { it.threadId }.toList() }
+          }
+        }
+      }
+      .toSet()
+  }
+
+  private fun loadFolders(context: Context): List<Folder> {
+    val (records, _) = currentFolderRecords(context)
+    val counts = SignalDatabase.chatFolders.getUnreadCountAndEmptyAndMutedStatusForFolders(records)
+    return records.map { it.toFolder(context, counts[it.id]?.first ?: 0) }
+  }
+
+  private fun loadChats(context: Context): Pair<Folder, List<Chat>> {
+    val (records, folder) = currentFolderRecords(context)
+    val threads = SignalDatabase.threads
+    val pinned = readChats(context, threads.getUnarchivedConversationList(ConversationFilter.OFF, true, 0, CHAT_LIMIT, folder), isPinned = true)
+    val others = readChats(context, threads.getUnarchivedConversationList(ConversationFilter.OFF, false, 0, CHAT_LIMIT, folder), isPinned = false)
+    var chats = pinned + others
+    if (folder.folderType == ChatFolderRecord.FolderType.ALL) {
+      val hidden = threadsHiddenFromAllChats(records)
+      if (hidden.isNotEmpty()) chats = chats.filter { it.threadId !in hidden }
+    }
+    return folder.toFolder(context, 0) to chats
+  }
+
+  private fun readChats(context: Context, cursor: android.database.Cursor, isPinned: Boolean): List<Chat> {
+    return SignalDatabase.threads.readerFor(cursor).use { reader ->
       generateSequence { reader.getNext() }
         .map { thread ->
           Chat(
             threadId = thread.threadId,
+            recipientId = thread.recipient.id,
             name = thread.recipient.getDisplayName(context),
             snippet = thread.body,
             unreadCount = thread.unreadCount,
-            date = thread.date
+            date = thread.date,
+            isPinned = isPinned
           )
         }
         .toList()
@@ -114,6 +243,7 @@ object TrukiWearRepository {
   }
 
   private fun loadMessages(context: Context, threadId: Long): List<Message> {
+    val isGroup = SignalDatabase.threads.getRecipientForThreadId(threadId)?.isGroup == true
     val cursor = SignalDatabase.messages.getConversation(threadId, offset = 0, limit = MESSAGE_LIMIT)
     return MessageTable.mmsReaderFor(cursor).use { reader ->
       generateSequence { reader.getNext() }
@@ -121,7 +251,7 @@ object TrukiWearRepository {
           Message(
             id = record.id,
             isOutgoing = record.isOutgoing,
-            author = if (record.isOutgoing || !record.fromRecipient.isIndividual) null else record.fromRecipient.getShortDisplayName(context),
+            author = if (isGroup && !record.isOutgoing) record.fromRecipient.getShortDisplayName(context) else null,
             body = record.getDisplayBody(context).toString().ifEmpty { "📎" },
             date = record.dateReceived
           )
@@ -132,11 +262,11 @@ object TrukiWearRepository {
   }
 
   /** Emits once immediately, then again (conflated) whenever upstream reports a change. */
-  private fun changes(register: (DatabaseObserver.Observer) -> Unit): Flow<Unit> {
+  private fun changes(vararg registers: (DatabaseObserver.Observer) -> Unit): Flow<Unit> {
     return callbackFlow {
       val observer = DatabaseObserver.Observer { trySend(Unit) }
       trySend(Unit)
-      register(observer)
+      registers.forEach { it(observer) }
       awaitClose { AppDependencies.databaseObserver.unregisterObserver(observer) }
     }.conflate()
   }

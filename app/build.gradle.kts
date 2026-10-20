@@ -476,6 +476,8 @@ android {
     create("wear") {
       dimension = "distribution"
       applicationId = "ee.truki.wear"
+      // Wear OS 3 is API 30; the Wear Compose libraries need at least 25.
+      minSdk = 30
       buildConfigField("boolean", "MANAGES_APP_UPDATES", "false")
       buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "null")
       buildConfigField("String", "BUILD_DISTRIBUTION_TYPE", "\"wear\"")
@@ -866,6 +868,12 @@ dependencies {
   testImplementation(libs.androidx.compose.ui.test.junit4)
 
   "perfImplementation"(libs.androidx.compose.ui.test.manifest)
+
+  // Truki: Wear OS UI
+  "wearImplementation"("androidx.wear.compose:compose-material3:1.7.1")
+  "wearImplementation"("androidx.wear.compose:compose-foundation:1.7.1")
+  "wearImplementation"("androidx.wear.compose:compose-navigation:1.7.1")
+  "wearImplementation"("androidx.wear:wear-input:1.2.0")
 
   androidTestImplementation(platform(libs.androidx.compose.bom))
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
