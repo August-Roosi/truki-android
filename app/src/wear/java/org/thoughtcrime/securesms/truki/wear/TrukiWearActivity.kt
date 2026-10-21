@@ -32,6 +32,7 @@ class TrukiWearActivity : PassphraseRequiredActivity() {
     private const val ROUTE_FOLDERS = "folders"
     private const val ROUTE_CONTACTS = "contacts"
     private const val ROUTE_THREAD = "thread/{threadId}"
+    private const val ROUTE_VOICE = "voice/{threadId}"
 
     fun intent(context: Context, threadId: Long?): Intent {
       return Intent(context, TrukiWearActivity::class.java).apply {
@@ -64,7 +65,7 @@ class TrukiWearActivity : PassphraseRequiredActivity() {
 
           SwipeDismissableNavHost(navController = navController, startDestination = ROUTE_CHATS) {
             composable(ROUTE_CHATS) {
-              TrukiWearChatListScreen(
+              TrukiWearChatsScreen(
                 onOpenThread = { navController.navigate("thread/$it") },
                 onOpenFolders = { navController.navigate(ROUTE_FOLDERS) },
                 onNewChat = { navController.navigate(ROUTE_CONTACTS) }
@@ -81,7 +82,15 @@ class TrukiWearActivity : PassphraseRequiredActivity() {
               TrukiWearFoldersScreen(onPicked = { navController.popBackStack() })
             }
             composable(ROUTE_THREAD, arguments = listOf(navArgument("threadId") { type = NavType.LongType })) { entry ->
-              TrukiWearThreadScreen(threadId = entry.arguments?.getLong("threadId") ?: return@composable)
+              val threadId = entry.arguments?.getLong("threadId") ?: return@composable
+              TrukiWearThreadScreen(
+                threadId = threadId,
+                onRecordVoice = { navController.navigate("voice/$threadId") }
+              )
+            }
+            composable(ROUTE_VOICE, arguments = listOf(navArgument("threadId") { type = NavType.LongType })) { entry ->
+              val threadId = entry.arguments?.getLong("threadId") ?: return@composable
+              TrukiWearVoiceScreen(threadId = threadId, onDone = { navController.popBackStack() })
             }
           }
         }

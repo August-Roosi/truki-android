@@ -68,6 +68,18 @@ class TrukiFolderExtrasTest {
   }
 
   @Test
+  fun `reads General's custom name`() {
+    val name = "Kodu".toByteArray(Charsets.UTF_8)
+    val bytes = ByteArrayOutputStream().apply {
+      tag(20004, 2)
+      varint(name.size.toLong())
+      write(name)
+    }.toByteArray()
+
+    assertEquals(TrukiFolderExtras(generalName = "Kodu"), TrukiFolderExtras.parse(bytes))
+  }
+
+  @Test
   fun `color zero means unset`() {
     val bytes = ByteArrayOutputStream().apply {
       tag(20002, 5)

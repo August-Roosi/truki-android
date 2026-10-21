@@ -19,26 +19,28 @@
             android:name="com.google.android.wearable.standalone"
             android:value="true" />
 
-        <!-- The phone launcher opens the phone UI; the watch gets its own. -->
-        <activity-alias
-            android:name=".RoutingActivity"
-            android:enabled="false"
-            tools:node="merge" />
-
         <provider
             android:name=".truki.wear.TrukiWearInitProvider"
             android:authorities="${applicationId}.trukiwearinit"
             android:exported="false" />
 
+        <!-- Declared before the alias below, which targets it. -->
         <activity
             android:name=".truki.wear.TrukiWearActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:theme="@style/Theme.Truki.Wear">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:theme="@style/Theme.Truki.Wear" />
+
+        <!--
+          Upstream's launcher entry opens the watch UI instead of the phone UI.
+          It must stay an enabled launcher activity: upstream publishes
+          conversation shortcuts against it after every sent message, and
+          Android rejects (and the app crashes on) shortcuts whose activity is
+          not a main activity.
+        -->
+        <activity-alias
+            android:name=".RoutingActivity"
+            android:targetActivity=".truki.wear.TrukiWearActivity"
+            tools:replace="android:targetActivity" />
     </application>
 </manifest>

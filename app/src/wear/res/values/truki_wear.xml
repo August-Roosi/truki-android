@@ -11,6 +11,9 @@
     <string name="truki_wear_reply">Reply</string>
     <string name="truki_wear_call">Call</string>
     <string name="truki_wear_new_chat">New chat</string>
+    <string name="truki_wear_react">React</string>
+    <string name="truki_wear_voice_message">Voice message</string>
+    <string name="truki_wear_send">Send</string>
     <string name="truki_wear_in_another_call">You\'re already in another call</string>
 
     <!-- Offered as suggestions on the system reply screen. -->

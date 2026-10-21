@@ -13,6 +13,8 @@ package org.thoughtcrime.securesms.truki.wear
  * optional string emoji    = 20001;
  * fixed32 color            = 20002;  // 0xAARRGGBB, 0 means unset
  * bool hideFromAllChats    = 20003;
+ * optional string generalName = 20004;  // General's custom name; Signal's own
+ *                                       // ALL-folder name must stay empty
  * ```
  *
  * Signal-Android does not know these fields, but keeps a folder record's
@@ -23,12 +25,15 @@ data class TrukiFolderExtras(
   val emoji: String? = null,
   /** 0xAARRGGBB, or null when unset. */
   val color: Int? = null,
-  val hideFromAllChats: Boolean = false
+  val hideFromAllChats: Boolean = false,
+  /** General's (the All chats folder's) custom name, if renamed in Truki Desktop. */
+  val generalName: String? = null
 ) {
   companion object {
     private const val FIELD_EMOJI = 20001
     private const val FIELD_COLOR = 20002
     private const val FIELD_HIDE_FROM_ALL_CHATS = 20003
+    private const val FIELD_GENERAL_NAME = 20004
 
     private const val WIRE_VARINT = 0
     private const val WIRE_FIXED64 = 1
@@ -68,7 +73,10 @@ data class TrukiFolderExtras(
           WIRE_LENGTH_DELIMITED -> {
             val length = readVarint().toInt()
             check(length >= 0 && pos + length <= bytes.size) { "bad length" }
-            if (field == FIELD_EMOJI) extras = extras.copy(emoji = String(bytes, pos, length, Charsets.UTF_8).ifEmpty { null })
+            when (field) {
+              FIELD_EMOJI -> extras = extras.copy(emoji = String(bytes, pos, length, Charsets.UTF_8).ifEmpty { null })
+              FIELD_GENERAL_NAME -> extras = extras.copy(generalName = String(bytes, pos, length, Charsets.UTF_8).ifEmpty { null })
+            }
             pos += length
           }
           WIRE_FIXED64 -> pos += 8
