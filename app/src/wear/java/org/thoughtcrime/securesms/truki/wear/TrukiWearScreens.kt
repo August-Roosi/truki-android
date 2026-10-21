@@ -48,6 +48,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -436,13 +438,19 @@ private fun MessageBubble(
   transformation: SurfaceTransformation
 ) {
   val replyThreshold = with(LocalDensity.current) { 56.dp.toPx() }
+  // Drags starting this close to the screen's left edge are "go back", never "reply".
+  val backEdge = with(LocalDensity.current) { 48.dp.toPx() }
   var offset by remember { mutableFloatStateOf(0f) }
+  var boxLeftInWindow by remember { mutableFloatStateOf(0f) }
 
   Box(
     contentAlignment = if (message.isOutgoing) Alignment.CenterEnd else Alignment.CenterStart,
-    modifier = modifier.pointerInput(message.id) {
+    modifier = modifier
+      .onGloballyPositioned { boxLeftInWindow = it.positionInWindow().x }
+      .pointerInput(message.id) {
       awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
+        if (boxLeftInWindow + down.position.x < backEdge) return@awaitEachGesture
         var dragged = 0f
         // Only rightward drags are ours; leftward ones go to the pager (call page).
         val start = awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.withContext
 import org.thoughtcrime.securesms.R
 import org.thoughtcrime.securesms.components.settings.app.chats.folders.ChatFolderRecord
@@ -149,7 +150,17 @@ object TrukiWearRepository {
   }
 
   fun messages(context: Context, threadId: Long): Flow<List<Message>> {
-    return changes({ AppDependencies.databaseObserver.registerConversationObserver(threadId, it) })
+    // Reactions are reported as message updates, not conversation changes.
+    val reactionChanges = callbackFlow {
+      val observer = DatabaseObserver.MessageObserver { trySend(Unit) }
+      AppDependencies.databaseObserver.registerMessageUpdateObserver(observer)
+      awaitClose { AppDependencies.databaseObserver.unregisterObserver(observer) }
+    }
+    return merge(
+      changes({ AppDependencies.databaseObserver.registerConversationObserver(threadId, it) }),
+      reactionChanges
+    )
+      .conflate()
       .map { loadMessages(context, threadId) }
       .flowOn(Dispatchers.IO)
   }
@@ -317,23 +328,23 @@ object TrukiWearRepository {
   private fun loadMessages(context: Context, threadId: Long): List<Message> {
     val isGroup = SignalDatabase.threads.getRecipientForThreadId(threadId)?.isGroup == true
     val cursor = SignalDatabase.messages.getConversation(threadId, offset = 0, limit = MESSAGE_LIMIT)
-    return MessageTable.mmsReaderFor(cursor).use { reader ->
-      generateSequence { reader.getNext() }
-        .map { record ->
-          Message(
-            id = record.id,
-            isOutgoing = record.isOutgoing,
-            author = if (isGroup && !record.isOutgoing) record.fromRecipient.getShortDisplayName(context) else null,
-            authorId = if (record.isOutgoing) Recipient.self().id else record.fromRecipient.id,
-            body = record.getDisplayBody(context).toString().ifEmpty { "📎" },
-            date = record.dateReceived,
-            dateSent = record.dateSent,
-            reactions = record.reactions.map { it.emoji }
-          )
-        }
-        .toList()
-        .reversed()
-    }
+    val records = MessageTable.mmsReaderFor(cursor).use { reader -> generateSequence { reader.getNext() }.toList() }
+    // The conversation query carries no reactions; upstream attaches them separately too.
+    val reactions = SignalDatabase.reactions.getReactionsForMessages(records.map { it.id })
+    return records
+      .map { record ->
+        Message(
+          id = record.id,
+          isOutgoing = record.isOutgoing,
+          author = if (isGroup && !record.isOutgoing) record.fromRecipient.getShortDisplayName(context) else null,
+          authorId = if (record.isOutgoing) Recipient.self().id else record.fromRecipient.id,
+          body = record.getDisplayBody(context).toString().ifEmpty { "📎" },
+          date = record.dateReceived,
+          dateSent = record.dateSent,
+          reactions = reactions[record.id].orEmpty().map { it.emoji }
+        )
+      }
+      .reversed()
   }
 
   /** Emits once immediately, then again (conflated) whenever upstream reports a change. */
