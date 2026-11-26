@@ -34,6 +34,8 @@ val canonicalVersionCode = 1768
 val canonicalVersionName = "8.32.1"
 val currentHotfixVersion = 0
 val maxHotfixVersions = 100
+// Truki: phone release revision (1-99). Reset to 1 when canonicalVersionCode changes.
+val trukiPhoneRevision = 1
 
 // We don't want versions to ever end in 0 so that they don't conflict with nightly versions
 val possibleHotfixVersions = (0 until maxHotfixVersions).toList().filter { it % 10 != 0 }
@@ -90,7 +92,10 @@ val selectableVariants = listOf(
   "githubProdRelease",
   // Truki: Wear OS
   "wearProdDebug",
-  "wearProdRelease"
+  "wearProdRelease",
+  // Truki: phone
+  "phoneProdDebug",
+  "phoneProdRelease"
 )
 
 // Wire 5.x iterates Android source sets and expects matching Kotlin source sets.
@@ -484,6 +489,20 @@ android {
       buildConfigField("boolean", "LINK_DEVICE_UX_ENABLED", "true")
     }
 
+    // Truki: phone build, self-updating from GitHub releases. Its code lives in src/phone.
+    create("phone") {
+      dimension = "distribution"
+      applicationId = "ee.truki.phone"
+      // Same formula as src/phone/.../TrukiPhoneVersion.kt (tested there).
+      require(trukiPhoneRevision in 1 until maxHotfixVersions) { "trukiPhoneRevision must be 1-99" }
+      versionCode = canonicalVersionCode * maxHotfixVersions + trukiPhoneRevision
+      versionName = "$canonicalVersionName-truki$trukiPhoneRevision"
+      buildConfigField("boolean", "MANAGES_APP_UPDATES", "true")
+      buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "\"https://github.com/August-Roosi/truki-android/releases/latest/download/latest.json\"")
+      buildConfigField("String", "BUILD_DISTRIBUTION_TYPE", "\"phone\"")
+      buildConfigField("boolean", "LINK_DEVICE_UX_ENABLED", "true")
+    }
+
     create("prod") {
       dimension = "environment"
 
@@ -581,6 +600,10 @@ androidComponents {
     // Starting with minSdk 23, Android leaves native libraries uncompressed, which is fine for the Play Store, but not for our self-distributed APKs.
     // This reverts it to the legacy behavior, compressing the native libraries, and drastically reducing the APK file size.
     if (variant.name.contains("website", ignoreCase = true) || variant.name.contains("github", ignoreCase = true)) {
+      variant.packaging.jniLibs.useLegacyPackaging.set(true)
+    }
+    // Truki: the phone APK is self-distributed too.
+    if (variant.name.startsWith("phone")) {
       variant.packaging.jniLibs.useLegacyPackaging.set(true)
     }
 

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright 2026 Truki
+  SPDX-License-Identifier: AGPL-3.0-only
+
+  Truki phone: merged over the main manifest for the "phone" flavor only.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:label="@string/truki_phone_app_name"
+        tools:replace="android:label">
+    </application>
+
+</manifest>
