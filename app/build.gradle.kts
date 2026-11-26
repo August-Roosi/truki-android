@@ -35,7 +35,7 @@ val canonicalVersionName = "8.32.1"
 val currentHotfixVersion = 0
 val maxHotfixVersions = 100
 // Truki: phone release revision (1-99). Reset to 1 when canonicalVersionCode changes.
-val trukiPhoneRevision = 1
+val trukiPhoneRevision = 2
 
 // We don't want versions to ever end in 0 so that they don't conflict with nightly versions
 val possibleHotfixVersions = (0 until maxHotfixVersions).toList().filter { it % 10 != 0 }
