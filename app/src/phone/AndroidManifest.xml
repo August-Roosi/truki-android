@@ -11,6 +11,12 @@
     <application
         android:label="@string/truki_phone_app_name"
         tools:replace="android:label">
+
+        <!-- Turns on "stay connected" once: this build gets no Google push. -->
+        <provider
+            android:name=".truki.phone.TrukiPhoneInitProvider"
+            android:authorities="${applicationId}.trukiphoneinit"
+            android:exported="false" />
     </application>
 
 </manifest>
