@@ -60,7 +60,9 @@ down, the phone keeps sending and receiving:
   such problem, but the name stays consistent. The icon is its own, so the two
   apps are distinguishable while both are installed.
 - **Google push:** Signal's FCM is bound to Signal's app ID and cannot work for
-  `ee.truki.phone`. The phone flavor does not initialise Firebase. It turns on
+  `ee.truki.phone`. As on the watch, upstream's FCM registration fails quietly
+  under another app ID (Firebase is configured by static resources, no plugin),
+  so no code is added to switch it off. The phone flavor turns on
   upstream's existing `forceWebsocketMode` ("stay connected") by default, as
   the watch does, until sub-project 2 replaces it.
 
@@ -156,8 +158,8 @@ down, the phone keeps sending and receiving:
   still builds. Cold builds take over an hour and run in the background.
 - **Unit tests:** upstream's unit tests for the phone variant fail no more than
   a baseline measured before the change. JVM tests for Truki code:
-  - the flavor's settings: app ID, update URL, distribution type, Firebase
-    off, `forceWebsocketMode` default on;
+  - the flavor's settings: app ID, update URL, distribution type, and the
+    once-only `forceWebsocketMode` default;
   - the release script's `latest.json` generation.
 - **Update test** (§2 step 3) passes.
 - **Done when** the move (§2 steps 5–10) is complete, its checklist passes and
