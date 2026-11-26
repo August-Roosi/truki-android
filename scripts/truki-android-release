@@ -53,6 +53,8 @@ AAPT2="$BT/aapt2"
 
 # 3. Build (upstream release builds are unsigned; signing happens below).
 ./gradlew --stop >/dev/null 2>&1 || true
+# Old APKs (earlier revisions) would make the arm64 pick ambiguous.
+rm -rf app/build/outputs/apk/phoneProd/release
 ./gradlew :Signal-Android:assemblePhoneProdRelease
 
 # 4. The arm64 APK.
