@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Copyright 2026 Truki
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Builds, signs and publishes a Truki phone release:
+#   phoneProdRelease (arm64-v8a) -> apksigner -> latest.json -> GitHub release.
+# The version comes from app/build.gradle.kts (trukiPhoneRevision); bump and
+# commit it first. Run from anywhere inside the repo.
+#
+#   scripts/truki-android-release [--dry-run]   (--dry-run: build + sign, no publish)
+set -euo pipefail
+
+REPO="August-Roosi/truki-android"
+KEY="$HOME/.config/truki/truki-android-release.jks"
+KEY_COPY="$HOME/varukoopiad/truki-android-signing/truki-android-release.jks"
+HUB_ENV="$HOME/Dokumendid/tehisintellekti-kodu/.env"
+SDK="${ANDROID_HOME:-$HOME/Android/Sdk}"
+export JAVA_HOME="${TRUKI_JAVA_HOME:-$HOME/.local/jdk/jdk-21}"
+
+DRY_RUN=0
+case "${1:-}" in
+  "") ;;
+  --dry-run) DRY_RUN=1 ;;
+  *) echo "usage: scripts/truki-android-release [--dry-run]" >&2; exit 2 ;;
+esac
+
+cd "$(git rev-parse --show-toplevel)"
+here="$(pwd)"
+
+die() { echo "truki-android-release: $*" >&2; exit 1; }
+
+# 1. Passwords, without echoing them. Only these two leave the hub .env.
+[[ -f "$HUB_ENV" ]] || die "missing $HUB_ENV"
+env_value() { sed -n "s/^$1=//p" "$HUB_ENV" | tail -1; }
+TRUKI_ANDROID_KEYSTORE_PASSWORD="$(env_value TRUKI_ANDROID_KEYSTORE_PASSWORD)"
+TRUKI_ANDROID_KEY_PASSWORD="$(env_value TRUKI_ANDROID_KEY_PASSWORD)"
+export TRUKI_ANDROID_KEYSTORE_PASSWORD TRUKI_ANDROID_KEY_PASSWORD
+[[ -n "${TRUKI_ANDROID_KEYSTORE_PASSWORD:-}" && -n "${TRUKI_ANDROID_KEY_PASSWORD:-}" ]] \
+  || die "TRUKI_ANDROID_KEYSTORE_PASSWORD / TRUKI_ANDROID_KEY_PASSWORD not in $HUB_ENV"
+
+# 2. The key and its backup must match.
+python3 scripts/truki_android_manifest.py check-key "$KEY" "$KEY_COPY"
+
+if [[ $DRY_RUN -eq 0 ]]; then
+  [[ -z "$(git status --porcelain --untracked-files=no)" ]] || die "working tree has uncommitted changes"
+  git fetch -q origin
+  git merge-base --is-ancestor HEAD origin/main || die "HEAD is not pushed to origin/main"
+fi
+
+BT="$(ls -d "$SDK"/build-tools/* | sort -V | tail -1)"
+APKSIGNER="$BT/apksigner"
+AAPT2="$BT/aapt2"
+
+# 3. Build (upstream release builds are unsigned; signing happens below).
+./gradlew --stop >/dev/null 2>&1 || true
+./gradlew :Signal-Android:assemblePhoneProdRelease
+
+# 4. The arm64 APK.
+mapfile -t found < <(find app/build/outputs/apk/phoneProd/release -name '*arm64-v8a*.apk')
+[[ ${#found[@]} -eq 1 ]] || die "expected one arm64-v8a APK, found: ${found[*]:-none}"
+unsigned="${found[0]}"
+
+badging="$("$AAPT2" dump badging "$unsigned" | grep -m1 '^package: ' || true)"
+read -r package version_code version_name < <(python3 scripts/truki_android_manifest.py badging "$badging")
+[[ "$package" == "ee.truki.phone" ]] || die "unexpected package $package"
+[[ "$version_name" == *-truki* ]] || die "unexpected versionName $version_name"
+tag="v$version_name"
+
+out="$here/build/truki-release/$version_name"
+rm -rf "$out"; mkdir -p "$out"
+apk="$out/Truki-phone-arm64-v8a-$version_name.apk"
+
+"$APKSIGNER" sign --ks "$KEY" --ks-key-alias truki \
+  --ks-pass env:TRUKI_ANDROID_KEYSTORE_PASSWORD --key-pass env:TRUKI_ANDROID_KEY_PASSWORD \
+  --out "$apk" "$unsigned"
+rm -f "$apk.idsig"
+echo "Signing certificate:"
+"$APKSIGNER" verify --print-certs "$apk" | grep -i 'SHA-256'
+
+# 5. latest.json
+python3 scripts/truki_android_manifest.py manifest \
+  --version-code "$version_code" --version-name "$version_name" \
+  --apk "$apk" --repo "$REPO" --tag "$tag" --out "$out/latest.json"
+cat "$out/latest.json"
+
+if [[ $DRY_RUN -eq 1 ]]; then
+  echo "Dry run: not publishing. Files in $out"
+  exit 0
+fi
+
+# 6. Publish.
+gh release create "$tag" "$apk" "$out/latest.json" \
+  --repo "$REPO" --target "$(git rev-parse HEAD)" --latest \
+  --title "Truki $version_name" \
+  --notes "Truki for Android (phone) $version_name, a Signal fork. Install the arm64-v8a APK."
+echo "Published https://github.com/$REPO/releases/tag/$tag"

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright 2026 Truki
+  SPDX-License-Identifier: AGPL-3.0-only
+-->
+<resources>
+    <!-- ASCII on purpose, as on Truki Desktop. -->
+    <string name="truki_phone_app_name" translatable="false">Truki</string>
+    <color name="truki_phone_launcher_background">#FF0F7B6C</color>
+</resources>

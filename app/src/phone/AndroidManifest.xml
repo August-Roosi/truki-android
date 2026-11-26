@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright 2026 Truki
+  SPDX-License-Identifier: AGPL-3.0-only
+
+  Truki phone: merged over the main manifest for the "phone" flavor only.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Upstream's self-updater, as in src/website/AndroidManifest.xml. -->
+    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION"/>
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"/>
+
+    <application
+        android:label="@string/truki_phone_app_name"
+        tools:replace="android:label">
+
+        <!-- Turns on "stay connected" once: this build gets no Google push. -->
+        <provider
+            android:name=".truki.phone.TrukiPhoneInitProvider"
+            android:authorities="${applicationId}.trukiphoneinit"
+            android:exported="false" />
+
+        <!-- Upstream's self-updater, as in src/website/AndroidManifest.xml. -->
+        <receiver android:name="org.thoughtcrime.securesms.apkupdate.ApkUpdateRefreshListener" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name="org.thoughtcrime.securesms.apkupdate.ApkUpdateDownloadManagerReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE"/>
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name="org.thoughtcrime.securesms.apkupdate.ApkUpdatePackageInstallerReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name="org.thoughtcrime.securesms.apkupdate.ApkUpdateNotificationReceiver"
+            android:exported="false" />
+    </application>
+
+</manifest>
