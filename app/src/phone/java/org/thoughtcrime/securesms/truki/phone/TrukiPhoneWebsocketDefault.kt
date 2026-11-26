@@ -22,8 +22,13 @@ object TrukiPhoneWebsocketDefault {
   private const val PREFS = "truki_phone"
   private const val PREF_APPLIED = "websocket_default_applied"
 
-  /** True when "stay connected" should be switched on now. */
-  fun decide(alreadyApplied: Boolean, enabled: Boolean): Boolean = !alreadyApplied && !enabled
+  /**
+   * True when "stay connected" should be switched on now. Only the user's own
+   * choice counts as on: upstream's FcmRefreshJob turns ENABLED_AUTOMATICALLY
+   * off again whenever it obtains a push token.
+   */
+  fun decide(alreadyApplied: Boolean, mode: ForceWebsocketMode): Boolean =
+    !alreadyApplied && mode != ForceWebsocketMode.ENABLED_BY_USER
 
   /**
    * Must run after app init (SignalStore exists). Waits until the account is
@@ -38,7 +43,7 @@ object TrukiPhoneWebsocketDefault {
     if (applied) return true
     if (!SignalStore.account.isRegistered) return false
 
-    if (decide(applied, SignalStore.settings.forceWebsocketMode.isEnabled)) {
+    if (decide(applied, SignalStore.settings.forceWebsocketMode)) {
       Log.i(TAG, "Turning on stay connected (no Google push for this build)")
       SignalStore.settings.forceWebsocketMode = ForceWebsocketMode.ENABLED_BY_USER
       AppDependencies.resetNetwork()

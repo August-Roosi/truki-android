@@ -40,6 +40,15 @@ class ManifestTest(unittest.TestCase):
         copy.write_bytes(b"key")
         self.assertIsNone(tam.check_key_backup(key, copy))
 
+    def test_parses_aapt2_badging(self):
+        # Real aapt2 line shape: compileSdkVersionCodename also ends in "name='".
+        line = ("package: name='ee.truki.phone' versionCode='176801' versionName='8.32.1-truki1' "
+                "platformBuildVersionName='17' platformBuildVersionCode='37' compileSdkVersion='37' "
+                "compileSdkVersionCodename='17'")
+        self.assertEqual(tam.parse_badging(line), ("ee.truki.phone", 176801, "8.32.1-truki1"))
+        with self.assertRaises(SystemExit):
+            tam.parse_badging("launchable-activity: name='x'")
+
 
 if __name__ == "__main__":
     unittest.main()

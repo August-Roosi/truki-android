@@ -5,6 +5,7 @@ signing-key backup guard for scripts/truki-android-release."""
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -17,6 +18,17 @@ def build_manifest(version_code: int, version_name: str, apk_path: Path, repo: s
         "url": f"https://github.com/{repo}/releases/download/{tag}/{apk_path.name}",
         "sha256sum": digest,
     }
+
+
+_BADGING = re.compile(r"^package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'")
+
+
+def parse_badging(line: str) -> tuple[str, int, str]:
+    """(package, versionCode, versionName) from aapt2's first badging line."""
+    m = _BADGING.match(line)
+    if not m:
+        raise SystemExit(f"cannot parse aapt2 badging: {line[:120]!r}")
+    return m[1], int(m[2]), m[3]
 
 
 def check_key_backup(key: Path, copy: Path) -> None:
@@ -36,6 +48,8 @@ def main() -> int:
     check = sub.add_parser("check-key")
     check.add_argument("key", type=Path)
     check.add_argument("copy", type=Path)
+    badging = sub.add_parser("badging")
+    badging.add_argument("line")
     manifest = sub.add_parser("manifest")
     manifest.add_argument("--version-code", type=int, required=True)
     manifest.add_argument("--version-name", required=True)
@@ -46,6 +60,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.cmd == "check-key":
         check_key_backup(args.key, args.copy)
+    elif args.cmd == "badging":
+        print(*parse_badging(args.line))
     else:
         data = build_manifest(args.version_code, args.version_name, args.apk, args.repo, args.tag)
         args.out.write_text(json.dumps(data, indent=2) + "\n")

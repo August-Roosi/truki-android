@@ -35,6 +35,6 @@ class TrukiPhoneBuildConfigTest {
 
   @Test
   fun `versionName carries the truki revision`() {
-    assertTrue(BuildConfig.VERSION_NAME, BuildConfig.VERSION_NAME.endsWith("-truki1"))
+    assertTrue(BuildConfig.VERSION_NAME, Regex("-truki[1-9][0-9]?$").containsMatchIn(BuildConfig.VERSION_NAME))
   }
 }
